@@ -1,15 +1,11 @@
 {
-  "public": false,
-  "deploy": {
-    "platform": "railway"
-  },
+  "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "python"
+    "builder": "NIXPACKS"
   },
-  "plugins": [
-    {
-      "name": "uvicorn",
-      "path": "backend/Procfile"
-    }
-  ]
+  "deploy": {
+    "startCommand": "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
 }
