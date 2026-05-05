@@ -1,0 +1,15 @@
+{
+  "public": false,
+  "deploy": {
+    "platform": "railway"
+  },
+  "build": {
+    "builder": "python"
+  },
+  "plugins": [
+    {
+      "name": "uvicorn",
+      "path": "backend/Procfile"
+    }
+  ]
+}

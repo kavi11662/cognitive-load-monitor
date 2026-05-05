@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teacher Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #eef2f7; color: #1f2937; }
+        header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        h1 { margin: 0; }
+        #alertBanner { display: none; padding: 16px; background: #ff4d4d; color: white; border-radius: 12px; text-align: center; font-weight: 700; margin-bottom: 18px; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+        .card { padding: 16px; border-radius: 16px; color: white; min-height: 120px; box-shadow: 0 10px 24px rgba(0,0,0,0.08); }
+        .card h3 { margin: 0 0 8px; }
+        #chartContainer { background: white; border-radius: 16px; padding: 18px; margin-top: 20px; box-shadow: 0 10px 24px rgba(0,0,0,0.08); }
+        #bars { display: flex; align-items: flex-end; gap: 4px; height: 160px; margin-top: 16px; }
+        .bar { flex: 1; background: #3b82f6; border-radius: 8px 8px 0 0; transition: height 0.35s ease; }
+        .summary { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+        .summary div { background: #fff; border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Teacher Live Dashboard</h1>
+            <p>Monitor student cognitive load in real time.</p>
+        </div>
+        <div class="summary">
+            <div id="studentCount">Students: 0</div>
+            <div id="avgScore">Average: 0</div>
+            <div id="overloadedCount">Overloaded: 0</div>
+        </div>
+    </header>
+    <div id="alertBanner">⚠️ Slow Down! Many Students Are Overloaded</div>
+    <div class="cards" id="studentCards"></div>
+    <div id="chartContainer">
+        <h2>Class Average Score</h2>
+        <div id="bars"></div>
+    </div>
+    <script src="teacher.js"></script>
+</body>
+</html>
