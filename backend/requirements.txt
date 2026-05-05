@@ -1,8 +1,7 @@
 fastapi
-uvicorn
-opencv-python
+uvicorn[standard]
+opencv-python-headless
 mediapipe
 scikit-learn
 numpy
-websockets
-# sqlite3 is included with Python standard library
+python-multipart
