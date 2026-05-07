@@ -1,9 +1,12 @@
 // Cognitive Load Monitor - Content Script
 // This script runs on Google Meet pages and monitors student/teacher cognitive load
 
+const BACKEND_WSS = "wss://cognitive-load-monitor-production.up.railway.app";
+
 class CognitiveLoadMonitor {
   constructor() {
     this.ws = null;
+    this.teacherWs = null;
     this.isMonitoring = false;
     this.userRole = localStorage.getItem('userRole') || null;
     this.studentName = localStorage.getItem('studentName') || '';
@@ -29,19 +32,17 @@ class CognitiveLoadMonitor {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 3000;
-    this.wsTimeout = null;
     this.lastUpdateTime = null;
     this.pingInterval = null;
-    this.students = {}; // For teacher role
-    this.panelWidth = 220; // Default for student
+    this.reconnectTimer = null;
+    this.students = {};
+    this.panelWidth = 220;
   }
 
   async init() {
     await this.waitForMeetToLoad();
     
-    // Check if role is already selected
     if (this.userRole) {
-      // Role already selected, show appropriate panel
       this.createFloatingPanel();
       this.setupEventListeners();
       if (this.userRole === 'student') {
@@ -50,7 +51,6 @@ class CognitiveLoadMonitor {
         this.setupTeacherMode();
       }
     } else {
-      // Show role selection screen
       this.showRoleSelection();
     }
   }
@@ -102,7 +102,6 @@ class CognitiveLoadMonitor {
       this.toggleMinimize();
     });
 
-    // Make draggable
     document.getElementById('clm-header').addEventListener('mousedown', (e) => {
       if (e.target.id === 'clm-minimize') return;
       this.setupDrag(e);
@@ -113,12 +112,10 @@ class CognitiveLoadMonitor {
     localStorage.setItem('userRole', role);
     this.userRole = role;
     
-    // Remove the role selection panel
     if (this.panel) {
       this.panel.remove();
     }
 
-    // Create the actual monitoring panel
     this.createFloatingPanel();
     this.setupEventListeners();
     
@@ -130,7 +127,6 @@ class CognitiveLoadMonitor {
   }
 
   setupTeacherMode() {
-    // Teacher mode setup
     this.panelWidth = 280;
     this.updatePanelWidthForTeacher();
   }
@@ -256,7 +252,6 @@ class CognitiveLoadMonitor {
       const dashboardBtn = document.getElementById('open-dashboard-btn');
       dashboardBtn.addEventListener('click', () => this.openFullDashboard());
       
-      // For teacher mode, automatically start monitoring
       this.startTeacherMonitoring();
     }
   }
@@ -266,12 +261,13 @@ class CognitiveLoadMonitor {
       localStorage.removeItem('userRole');
       localStorage.removeItem('studentName');
       if (this.ws) this.ws.close();
+      if (this.teacherWs) this.teacherWs.close();
       if (this.videoStream) {
         this.videoStream.getTracks().forEach(track => track.stop());
       }
       if (this.monitoringInterval) clearInterval(this.monitoringInterval);
       if (this.pingInterval) clearInterval(this.pingInterval);
-      if (this.wsTimeout) clearTimeout(this.wsTimeout);
+      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
       if (this.panel) this.panel.remove();
       
       const monitor = new CognitiveLoadMonitor();
@@ -352,9 +348,8 @@ class CognitiveLoadMonitor {
       this.setupCanvas();
       this.isMonitoring = true;
       this.reconnectAttempts = 0;
-      this.connectWebSocket();
+      this.connectStudentWS();
       this.startCaptureLoop();
-      this.updateUI();
 
       document.getElementById('clm-start-btn').classList.add('hidden');
       document.getElementById('clm-stop-btn').classList.remove('hidden');
@@ -384,8 +379,8 @@ class CognitiveLoadMonitor {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
     }
-    if (this.wsTimeout) {
-      clearTimeout(this.wsTimeout);
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
     }
     this.updateStatusUI('disconnected', '🔴 Disconnected');
     document.getElementById('clm-start-btn').classList.remove('hidden');
@@ -486,74 +481,52 @@ class CognitiveLoadMonitor {
     }
   }
 
-  connectWebSocket() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return;
+  connectStudentWS() {
+    if (this.ws) {
+      this.ws.close();
     }
 
-    let wsUrl;
-    if (this.userRole === 'teacher') {
-      wsUrl = 'wss://cognitive-load-monitor-production.up.railway.app/ws/teacher';
-    } else {
-      wsUrl = `wss://cognitive-load-monitor-production.up.railway.app/ws/student/${encodeURIComponent(this.studentName)}`;
-    }
+    const url = `${BACKEND_WSS}/ws/student/${encodeURIComponent(this.studentName)}`;
 
     try {
-      this.ws = new WebSocket(wsUrl);
+      this.ws = new WebSocket(url);
 
-      this.ws.onopen = () => {
+      this.ws.addEventListener('open', () => {
         this.reconnectAttempts = 0;
         this.updateStatusUI('connected', '🟢 Connected');
-        console.log('Connected to monitoring server:', wsUrl);
-
-        // Start ping interval for student mode to keep connection alive
-        if (this.userRole === 'student') {
-          if (this.pingInterval) clearInterval(this.pingInterval);
-          this.pingInterval = setInterval(() => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-              this.ws.send(JSON.stringify({ type: 'ping', student_name: this.studentName }));
-            }
-          }, 20000);
-        }
-
-        // Update localStorage for popup
+        console.log('Connected to student WebSocket:', url);
         localStorage.setItem('connectionStatus', 'connected');
-      };
 
-      this.ws.onmessage = (event) => {
+        // Send ping every 20 seconds to keep connection alive
+        if (this.pingInterval) clearInterval(this.pingInterval);
+        this.pingInterval = setInterval(() => {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'ping', student_name: this.studentName }));
+          }
+        }, 20000);
+      });
+
+      this.ws.addEventListener('message', (event) => {
         try {
           this.lastUpdateTime = new Date();
           this.updateUpdatedTime();
 
           const data = JSON.parse(event.data);
-
-          if (this.userRole === 'teacher') {
-            // Handle teacher messages - array of student data
-            this.handleTeacherMessage(data);
-          } else {
-            // Handle student messages
-            if (data.type === 'pong') {
-              // Just acknowledge pong, don't do anything
-              console.log('Pong received');
-            } else if (data.cognitive_load_score !== undefined) {
-              this.currentScore = Math.round(data.cognitive_load_score);
-              this.updateScoreDisplay(this.currentScore);
-              localStorage.setItem('cognitiveScore', this.currentScore);
-            }
+          
+          if (data.type === 'pong') {
+            console.log('Pong received');
+          } else if (data.cognitive_load_score !== undefined) {
+            this.currentScore = Math.round(data.cognitive_load_score);
+            this.updateScoreDisplay(this.currentScore);
+            localStorage.setItem('cognitiveScore', this.currentScore);
           }
         } catch (err) {
           console.error('Error parsing message:', err);
         }
-      };
+      });
 
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        this.updateStatusUI('disconnected', '🔴 Connection Error');
-        localStorage.setItem('connectionStatus', 'disconnected');
-      };
-
-      this.ws.onclose = () => {
-        console.log('WebSocket closed');
+      this.ws.addEventListener('close', () => {
+        console.log('Student WebSocket closed');
         if (this.pingInterval) clearInterval(this.pingInterval);
         this.updateStatusUI('disconnected', '🔴 Disconnected');
         localStorage.setItem('connectionStatus', 'disconnected');
@@ -563,13 +536,73 @@ class CognitiveLoadMonitor {
           this.reconnectAttempts++;
           this.updateStatusUI('connecting', '🟡 Reconnecting...');
           localStorage.setItem('connectionStatus', 'connecting');
-          setTimeout(() => this.connectWebSocket(), 3000);
+          this.reconnectTimer = setTimeout(() => this.connectStudentWS(), 3000);
         }
-      };
+      });
+
+      this.ws.addEventListener('error', (error) => {
+        console.error('Student WebSocket error:', error);
+        this.updateStatusUI('disconnected', '🔴 Error - Retrying...');
+        localStorage.setItem('connectionStatus', 'disconnected');
+      });
     } catch (err) {
-      console.error('WebSocket connection error:', err);
+      console.error('Failed to connect to student WebSocket:', err);
       this.updateStatusUI('disconnected', '🔴 Connection Error');
       localStorage.setItem('connectionStatus', 'disconnected');
+      
+      if (this.isMonitoring) {
+        this.reconnectTimer = setTimeout(() => this.connectStudentWS(), 3000);
+      }
+    }
+  }
+
+  connectTeacherWS() {
+    const url = `${BACKEND_WSS}/ws/teacher`;
+
+    try {
+      this.teacherWs = new WebSocket(url);
+
+      this.teacherWs.addEventListener('open', () => {
+        this.updateStatusUI('connected', '🟢 Connected');
+        console.log('Connected to teacher WebSocket:', url);
+        localStorage.setItem('connectionStatus', 'connected');
+      });
+
+      this.teacherWs.addEventListener('message', (event) => {
+        try {
+          this.lastUpdateTime = new Date();
+          this.updateUpdatedTime();
+
+          const students = JSON.parse(event.data);
+          this.handleTeacherMessage(students);
+        } catch (err) {
+          console.error('Error parsing teacher message:', err);
+        }
+      });
+
+      this.teacherWs.addEventListener('close', () => {
+        console.log('Teacher WebSocket closed');
+        this.updateStatusUI('disconnected', '🔴 Reconnecting...');
+        localStorage.setItem('connectionStatus', 'disconnected');
+        
+        if (this.isMonitoring) {
+          this.reconnectTimer = setTimeout(() => this.connectTeacherWS(), 3000);
+        }
+      });
+
+      this.teacherWs.addEventListener('error', (error) => {
+        console.error('Teacher WebSocket error:', error);
+        this.updateStatusUI('disconnected', '🔴 Error');
+        localStorage.setItem('connectionStatus', 'disconnected');
+      });
+    } catch (err) {
+      console.error('Failed to connect to teacher WebSocket:', err);
+      this.updateStatusUI('disconnected', '🔴 Connection Error');
+      localStorage.setItem('connectionStatus', 'disconnected');
+      
+      if (this.isMonitoring) {
+        this.reconnectTimer = setTimeout(() => this.connectTeacherWS(), 3000);
+      }
     }
   }
 
@@ -622,7 +655,6 @@ class CognitiveLoadMonitor {
     const facePresent = document.getElementById('clm-face-present');
     if (facePresent) facePresent.textContent = this.face_present ? 'Yes' : 'No';
 
-    // Save to localStorage for popup
     localStorage.setItem('cognitiveScore', score);
   }
 
@@ -656,8 +688,7 @@ class CognitiveLoadMonitor {
     if (statusText) {
       statusText.textContent = text;
     }
-    
-    // Map status to localStorage value
+
     let storageStatus = 'disconnected';
     if (status === 'connected') {
       storageStatus = 'connected';
@@ -678,8 +709,6 @@ class CognitiveLoadMonitor {
   }
 
   handleTeacherMessage(data) {
-    // Handle teacher-specific messages
-    // Data is an array of student objects from the backend
     if (Array.isArray(data)) {
       this.students = {};
       data.forEach(student => {
@@ -694,17 +723,6 @@ class CognitiveLoadMonitor {
           };
         }
       });
-      this.updateTeacherDashboard();
-    } else if (data.type === 'student_update' && data.student_name) {
-      // Handle single student update
-      const score = Math.round(data.cognitive_load_score || 0);
-      this.students[data.student_name] = {
-        name: data.student_name,
-        score: score,
-        label: this.getScoreLabel(score),
-        emoji: this.getScoreEmoji(score),
-        color: this.getScoreColor(score)
-      };
       this.updateTeacherDashboard();
     }
   }
@@ -726,7 +744,6 @@ class CognitiveLoadMonitor {
     const avgScore = count > 0 ? Math.round(totalScore / count) : 0;
     const overloadedPercent = count > 0 ? (overloadedCount / count) * 100 : 0;
 
-    // Update stats in panel
     const countEl = document.getElementById('students-count');
     if (countEl) countEl.textContent = count;
     
@@ -736,7 +753,6 @@ class CognitiveLoadMonitor {
     const overloadedEl = document.getElementById('overloaded-count');
     if (overloadedEl) overloadedEl.textContent = overloadedCount;
 
-    // Show/hide alert banner
     const alertBanner = document.getElementById('teacher-alert');
     if (alertBanner) {
       if (overloadedPercent >= 30) {
@@ -746,7 +762,6 @@ class CognitiveLoadMonitor {
       }
     }
 
-    // Update students list
     const listEl = document.getElementById('students-list');
     if (listEl) {
       listEl.innerHTML = studentsList.map(student => `
@@ -760,7 +775,6 @@ class CognitiveLoadMonitor {
       `).join('');
     }
 
-    // Save to localStorage for popup to access
     localStorage.setItem('teacherStudents', JSON.stringify(this.students));
   }
 
@@ -768,11 +782,7 @@ class CognitiveLoadMonitor {
     this.isMonitoring = true;
     this.reconnectAttempts = 0;
     localStorage.setItem('userRole', 'teacher');
-    this.connectWebSocket();
-  }
-
-  updateUI() {
-    // UI updated by event listeners
+    this.connectTeacherWS();
   }
 }
 

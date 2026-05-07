@@ -7,6 +7,8 @@ from database import save_score, get_all_latest_scores, get_history
 from cognitive_engine import calculate_cognitive_score, label_color
 
 app = FastAPI()
+
+# Add CORS middleware to accept connections from Chrome extensions and Meet
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,6 +16,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Root endpoint for Railway health checks
+@app.get("/")
+async def root():
+    return {"status": "Cognitive Load Monitor API is running"}
 
 
 @app.websocket("/ws/student/{student_name}")
@@ -55,8 +63,10 @@ async def student_socket(websocket: WebSocket, student_name: str):
                 "timestamp": timestamp,
             }))
     except WebSocketDisconnect:
+        print(f"Student {student_name} disconnected")
         return
-    except Exception:
+    except Exception as e:
+        print(f"Student socket error: {e}")
         await websocket.close()
 
 
@@ -79,8 +89,10 @@ async def teacher_socket(websocket: WebSocket):
             await websocket.send_text(json.dumps(student_data))
             await asyncio.sleep(1)
     except WebSocketDisconnect:
+        print("Teacher disconnected")
         return
-    except Exception:
+    except Exception as e:
+        print(f"Teacher socket error: {e}")
         await websocket.close()
 
 
@@ -93,4 +105,5 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, ws_ping_interval=20, ws_ping_pong_timeout=20)
+
