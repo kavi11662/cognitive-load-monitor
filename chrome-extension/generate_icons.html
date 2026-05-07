@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Cognitive Load Monitor Icon Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #1a1a2e;
+      color: #fff;
+    }
+    h1 {
+      color: #4CAF50;
+    }
+    .container {
+      background: #0f3460;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    canvas {
+      border: 1px solid #16213e;
+      margin: 10px;
+      background: white;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px 5px 10px 0;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #66BB6A;
+    }
+    .icon-section {
+      margin-bottom: 20px;
+      border: 1px solid #16213e;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    .base64-text {
+      background: #16213e;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      word-break: break-all;
+      max-height: 150px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 11px;
+    }
+    .info {
+      background: #1e3a5f;
+      border-left: 4px solid #4CAF50;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 Cognitive Load Monitor - Icon Generator</h1>
+  
+  <div class="info">
+    <strong>Instructions:</strong>
+    <ol>
+      <li>Click "Generate Icons" button to create the three icon sizes</li>
+      <li>Click "Download" for each size to save as PNG</li>
+      <li>Place the downloaded files in the <code>chrome-extension/icons/</code> folder</li>
+      <li>Files must be named: icon16.png, icon48.png, icon128.png</li>
+    </ol>
+  </div>
+
+  <button onclick="generateAllIcons()">Generate All Icons</button>
+  <button onclick="copyAllBase64()">Copy All Base64 to Clipboard</button>
+
+  <div class="icon-section">
+    <h3>Icon 16x16px</h3>
+    <canvas id="canvas16" width="16" height="16"></canvas>
+    <br>
+    <button onclick="downloadIcon('canvas16', 'icon16.png')">Download 16x16</button>
+    <button onclick="copyBase64('canvas16')">Copy Base64</button>
+    <div class="base64-text" id="base64-16"></div>
+  </div>
+
+  <div class="icon-section">
+    <h3>Icon 48x48px</h3>
+    <canvas id="canvas48" width="48" height="48"></canvas>
+    <br>
+    <button onclick="downloadIcon('canvas48', 'icon48.png')">Download 48x48</button>
+    <button onclick="copyBase64('canvas48')">Copy Base64</button>
+    <div class="base64-text" id="base64-48"></div>
+  </div>
+
+  <div class="icon-section">
+    <h3>Icon 128x128px</h3>
+    <canvas id="canvas128" width="128" height="128"></canvas>
+    <br>
+    <button onclick="downloadIcon('canvas128', 'icon128.png')">Download 128x128</button>
+    <button onclick="copyBase64('canvas128')">Copy Base64</button>
+    <div class="base64-text" id="base64-128"></div>
+  </div>
+
+  <script>
+    function drawBrainIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+      const padding = size * 0.1;
+      const innerSize = size - (padding * 2);
+
+      // Background
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, size, size);
+
+      // Brain colors - gradient
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#4CAF50');
+      gradient.addColorStop(1, '#66BB6A');
+
+      // Draw brain-like shape
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const brainRadius = innerSize / 2;
+
+      // Left hemisphere
+      ctx.arc(centerX - brainRadius * 0.3, centerY - brainRadius * 0.2, brainRadius * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Right hemisphere
+      ctx.beginPath();
+      ctx.arc(centerX + brainRadius * 0.3, centerY - brainRadius * 0.2, brainRadius * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Center part
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY + brainRadius * 0.2, brainRadius * 0.35, brainRadius * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.beginPath();
+      ctx.arc(centerX - brainRadius * 0.15, centerY - brainRadius * 0.3, brainRadius * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function generateAllIcons() {
+      const sizes = [
+        { canvas: 'canvas16', size: 16 },
+        { canvas: 'canvas48', size: 48 },
+        { canvas: 'canvas128', size: 128 }
+      ];
+
+      sizes.forEach(({ canvas }) => {
+        const canvasEl = document.getElementById(canvas);
+        drawBrainIcon(canvasEl);
+        updateBase64(canvas);
+      });
+
+      alert('Icons generated! Click Download to save each one.');
+    }
+
+    function updateBase64(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      const base64 = canvas.toDataURL('image/png');
+      const base64Id = 'base64-' + canvasId.replace('canvas', '');
+      document.getElementById(base64Id).textContent = base64;
+    }
+
+    function downloadIcon(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = filename;
+      link.click();
+    }
+
+    function copyBase64(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      const base64 = canvas.toDataURL('image/png');
+      navigator.clipboard.writeText(base64).then(() => {
+        alert('Base64 copied to clipboard!');
+      });
+    }
+
+    function copyAllBase64() {
+      const base64_16 = document.getElementById('canvas16').toDataURL('image/png');
+      const base64_48 = document.getElementById('canvas48').toDataURL('image/png');
+      const base64_128 = document.getElementById('canvas128').toDataURL('image/png');
+
+      const allBase64 = `icon16.png:\n${base64_16}\n\nicon48.png:\n${base64_48}\n\nicon128.png:\n${base64_128}`;
+      navigator.clipboard.writeText(allBase64).then(() => {
+        alert('All base64 strings copied to clipboard!');
+      });
+    }
+
+    // Generate icons on page load
+    window.addEventListener('load', generateAllIcons);
+  </script>
+</body>
+</html>

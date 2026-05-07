@@ -1,0 +1,157 @@
+COGNITIVE LOAD MONITOR - CHROME EXTENSION
+Installation Instructions
+
+=== STEP-BY-STEP INSTALLATION ===
+
+Step 1: Generate Icons (IMPORTANT - DO THIS FIRST!)
+------------------------------------------------------
+1. Open the file "generate_icons.html" in Google Chrome
+2. Icons will be automatically generated (you'll see 3 canvases with brain icons)
+3. Click "Download 16x16" and save it as "icon16.png"
+4. Click "Download 48x48" and save it as "icon48.png"
+5. Click "Download 128x128" and save it as "icon128.png"
+6. Move all three PNG files into the "icons" folder inside chrome-extension/
+
+Alternative: If downloads don't work, use "Copy Base64" buttons and manually convert
+the base64 data to PNG files using an online converter.
+
+
+Step 2: Load the Extension in Chrome
+-------------------------------------
+1. Open Google Chrome browser
+2. Type this in the address bar (or copy-paste):
+   chrome://extensions
+3. Press Enter
+4. Look for the toggle switch at the TOP RIGHT that says "Developer mode"
+5. Turn ON the "Developer mode" toggle (it will become blue/highlighted)
+6. Click the "Load unpacked" button (should appear after enabling Developer mode)
+7. Navigate to and select the "chrome-extension" folder
+8. Click "Select Folder"
+9. Done! The extension is now installed
+
+
+Step 3: Using the Extension
+----------------------------
+1. Open Google Meet (meet.google.com)
+2. You should see a floating panel appear in the bottom-right corner
+3. Enter your name in the input field
+4. Click "Start Monitoring"
+5. Allow camera access when prompted
+6. The extension will connect to the monitoring server
+7. You'll see a live cognitive load score with emoji and label
+
+
+Step 4: Troubleshooting
+-----------------------
+
+Issue: Panel doesn't appear on Google Meet
+- Make sure you turned ON "Developer mode" in chrome://extensions
+- Refresh the Google Meet page (press F5 or Ctrl+R)
+- Check if the extension is enabled (blue toggle next to it)
+
+Issue: Camera access denied
+- Click the camera icon in the Chrome address bar
+- Select "Always allow" for permissions
+- Refresh the page
+
+Issue: WebSocket connection fails
+- Check your internet connection
+- Make sure the backend server is running at:
+  https://cognitive-load-monitor-production.up.railway.app
+- Open browser console (F12 > Console tab) to see error messages
+
+Issue: Icons not showing
+- Make sure icon16.png, icon48.png, and icon128.png are in the icons/ folder
+- They must be actual PNG files, not just images
+- Reload the extension in chrome://extensions (click the reload icon)
+
+Issue: Extension icon not showing in toolbar
+- Click the puzzle piece icon in Chrome toolbar (Extensions menu)
+- Pin the "Cognitive Load Monitor" extension
+- The icon should now appear in your toolbar
+
+
+Step 5: Advanced Features
+--------------------------
+
+Popup Menu:
+- Click the extension icon in the toolbar to see the popup
+- Shows current connection status
+- Shows live cognitive load score
+- Button to open Teacher Dashboard (shows analytics)
+- Button to reset student name
+
+Panel Controls:
+- Draggable: Click and drag the header to move the panel
+- Minimize: Click the "−" button in the top right to minimize
+- Start/Stop: Toggle monitoring on and off
+- Name: Save your name for tracking
+
+
+Step 6: Disable/Remove Extension
+---------------------------------
+
+To temporarily disable:
+- Go to chrome://extensions
+- Click the toggle next to "Cognitive Load Monitor" to turn it off
+
+To completely remove:
+- Go to chrome://extensions
+- Click "Remove" button
+- Click "Remove" to confirm
+
+
+=== TECHNICAL DETAILS ===
+
+WebSocket Connection:
+- Connects to: wss://cognitive-load-monitor-production.up.railway.app/ws/student/{name}
+- Sends metrics every 1 second:
+  * student_name: Your entered name
+  * blink_rate: Detected blinks per minute
+  * face_present: Whether face is detected in webcam
+  * hesitation_ms: Typing hesitation in milliseconds
+  * mouse_erratic: Mouse movement variance score
+  * timestamp: ISO 8601 timestamp
+
+Received Data:
+- Server sends back cognitive_load_score (0-100)
+- Score interpretation:
+  * 0-30: Disengaged (orange) 😐
+  * 30-50: Relaxed (green) 😊
+  * 50-70: Focused (blue) 🧠
+  * 70-100: Overloaded (red) 😰
+
+
+=== DATA PRIVACY ===
+
+What data is collected:
+- Student name (you provide this)
+- Blink rate from your webcam
+- Whether your face is detected
+- Typing patterns (hesitation)
+- Mouse movement patterns
+- Timestamps
+
+Data goes to:
+- Only to cognitive-load-monitor-production.up.railway.app
+- Processed by the monitoring backend
+- Used only for cognitive load analysis
+
+Data security:
+- Uses WebSocket Secure (WSS) encrypted connection
+- Camera feed is processed locally in your browser
+- Camera images are NOT sent to the server
+- Only metrics are sent, not video
+
+
+=== SUPPORT ===
+
+For issues or questions:
+1. Check this file for troubleshooting
+2. Open browser console (F12 > Console) to see error messages
+3. Try disabling and re-enabling the extension
+4. Make sure Google Meet is fully loaded before monitoring
+5. Check internet connection
+
+
+Enjoy monitoring cognitive load in Google Meet! 🧠

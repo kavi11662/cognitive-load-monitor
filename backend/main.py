@@ -24,6 +24,11 @@ async def student_socket(websocket: WebSocket, student_name: str):
             data = await websocket.receive_text()
             payload = json.loads(data)
 
+            # Handle ping messages to keep connection alive
+            if payload.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+                continue
+
             blink_rate = float(payload.get("blink_rate", 15))
             face_present = bool(payload.get("face_present", True))
             expression_score = float(payload.get("expression_score", 60))
@@ -44,7 +49,7 @@ async def student_socket(websocket: WebSocket, student_name: str):
             save_score(student_name, student_name, score_value, label, timestamp)
 
             await websocket.send_text(json.dumps({
-                "score": score_value,
+                "cognitive_load_score": score_value,
                 "label": label,
                 "color": color,
                 "timestamp": timestamp,
@@ -61,9 +66,17 @@ async def teacher_socket(websocket: WebSocket):
     try:
         while True:
             latest_scores = get_all_latest_scores()
-            await websocket.send_text(json.dumps({
-                "scores": latest_scores,
-            }))
+            # Send as array of student data
+            student_data = []
+            for student_name, score_info in latest_scores.items():
+                student_data.append({
+                    "student_name": student_name,
+                    "cognitive_load_score": score_info.get("score", 0),
+                    "label": score_info.get("label", "Unknown"),
+                    "color": score_info.get("color", "#888"),
+                    "timestamp": score_info.get("timestamp"),
+                })
+            await websocket.send_text(json.dumps(student_data))
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         return

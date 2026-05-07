@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cognitive Load Monitor</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 350px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+    }
+
+    .popup-container {
+      padding: 20px;
+    }
+
+    .popup-header {
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .popup-header h1 {
+      font-size: 18px;
+      margin-bottom: 4px;
+      font-weight: 700;
+    }
+
+    .popup-header p {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .role-badge {
+      display: inline-block;
+      background: #0f3460;
+      border: 1px solid #16213e;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-top: 8px;
+      color: #4CAF50;
+      font-weight: 600;
+    }
+
+    .status-box {
+      background: #0f3460;
+      border: 1px solid #16213e;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #F44336;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.connected {
+      background: #4CAF50;
+    }
+
+    .status-dot.connecting {
+      background: #FFC107;
+      animation: pulse-fast 1s infinite;
+    }
+
+    .status-dot.offline {
+      background: #F44336;
+      animation: pulse-fast 0.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes pulse-fast {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .status-info {
+      flex: 1;
+    }
+
+    .status-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 2px;
+    }
+
+    .status-value {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .info-section {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+
+    .info-label {
+      color: #888;
+      font-size: 11px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .info-value {
+      color: #fff;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .info-value:last-child {
+      margin-bottom: 0;
+    }
+
+    .score-display {
+      background: #0f3460;
+      border-left: 4px solid #4CAF50;
+      padding: 10px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .score-emoji {
+      font-size: 24px;
+    }
+
+    .score-text {
+      flex: 1;
+    }
+
+    .score-name {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .score-number {
+      font-size: 13px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .stat-box {
+      background: #0f3460;
+      padding: 8px;
+      border-radius: 4px;
+      text-align: center;
+      border-left: 3px solid #2196F3;
+    }
+
+    .stat-box.overloaded {
+      border-left-color: #F44336;
+    }
+
+    .stat-box.avg {
+      border-left-color: #FFC107;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #888;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-dashboard {
+      background: #2196F3;
+      color: #fff;
+    }
+
+    .btn-dashboard:hover {
+      background: #42A5F5;
+      transform: translateY(-1px);
+    }
+
+    .btn-reset {
+      background: #FF9800;
+      color: #fff;
+    }
+
+    .btn-reset:hover {
+      background: #FFB74D;
+      transform: translateY(-1px);
+    }
+
+    .divider {
+      height: 1px;
+      background: #16213e;
+      margin: 12px 0;
+    }
+
+    .message {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+      padding: 8px;
+      background: #0f3460;
+      border-radius: 4px;
+      margin-top: 12px;
+    }
+
+    .message.error {
+      color: #F44336;
+    }
+
+    .teacher-stats {
+      background: #0f3460;
+      border: 1px solid #16213e;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .teacher-stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #16213e;
+    }
+
+    .teacher-stat-row:last-child {
+      border-bottom: none;
+    }
+
+    .teacher-stat-label {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .teacher-stat-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .warning-alert {
+      background: #F44336;
+      color: #fff;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+
+    .warning-alert.show {
+      display: block;
+      animation: pulse-warning 1s infinite;
+    }
+
+    @keyframes pulse-warning {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+  </style>
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <h1>📊 Load Monitor</h1>
+      <p id="popup-role-text">Extension Status</p>
+      <div class="role-badge" id="popup-role-badge">Not Set</div>
+    </div>
+
+    <div class="status-box">
+      <div class="status-dot" id="popup-status-dot"></div>
+      <div class="status-info">
+        <div class="status-label">Connection</div>
+        <div class="status-value" id="popup-status-text">Disconnected</div>
+      </div>
+    </div>
+
+    <!-- Student Mode -->
+    <div id="student-content">
+      <div class="info-section">
+        <div class="info-label">Student Name</div>
+        <div class="info-value" id="popup-student-name">Not set</div>
+
+        <div style="margin-top: 8px;">
+          <div class="info-label">Current Score</div>
+          <div class="score-display">
+            <span class="score-emoji" id="popup-score-emoji">😊</span>
+            <div class="score-text">
+              <div class="score-name" id="popup-score-label">Not monitoring</div>
+              <div class="score-number" id="popup-score-value">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="button-group">
+        <button class="btn btn-dashboard" id="popup-dashboard-btn">Dashboard</button>
+        <button class="btn btn-reset" id="popup-reset-btn">Reset</button>
+      </div>
+    </div>
+
+    <!-- Teacher Mode -->
+    <div id="teacher-content" style="display: none;">
+      <div class="warning-alert" id="popup-alert-banner">
+        ⚠️ Slow Down! 30%+ students overloaded
+      </div>
+
+      <div class="teacher-stats">
+        <div class="teacher-stat-row">
+          <span class="teacher-stat-label">Students</span>
+          <span class="teacher-stat-value" id="popup-students-count">0</span>
+        </div>
+        <div class="teacher-stat-row">
+          <span class="teacher-stat-label">Average Score</span>
+          <span class="teacher-stat-value" id="popup-avg-score">0</span>
+        </div>
+        <div class="teacher-stat-row">
+          <span class="teacher-stat-label">Overloaded</span>
+          <span class="teacher-stat-value" id="popup-overloaded-count">0</span>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-dashboard" id="popup-open-dashboard-btn">Full Dashboard</button>
+        <button class="btn btn-reset" id="popup-change-role-btn">Change Role</button>
+      </div>
+    </div>
+
+    <div class="message" id="popup-message"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+
+    }
+
+    .info-value:last-child {
+      margin-bottom: 0;
+    }
+
+    .score-display {
+      background: #0f3460;
+      border-left: 4px solid #4CAF50;
+      padding: 10px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .score-emoji {
+      font-size: 24px;
+    }
+
+    .score-text {
+      flex: 1;
+    }
+
+    .score-name {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .score-number {
+      font-size: 13px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-dashboard {
+      background: #2196F3;
+      color: #fff;
+    }
+
+    .btn-dashboard:hover {
+      background: #42A5F5;
+      transform: translateY(-1px);
+    }
+
+    .btn-reset {
+      background: #FF9800;
+      color: #fff;
+    }
+
+    .btn-reset:hover {
+      background: #FFB74D;
+      transform: translateY(-1px);
+    }
+
+    .divider {
+      height: 1px;
+      background: #16213e;
+      margin: 12px 0;
+    }
+
+    .message {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+      padding: 8px;
+      background: #0f3460;
+      border-radius: 4px;
+      margin-top: 12px;
+    }
+
+    .message.error {
+      color: #F44336;
+    }
+  </style>
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <h1>📊 Load Monitor</h1>
+      <p>Student Cognitive Load</p>
+    </div>
+
+    <div class="status-box">
+      <div class="status-dot" id="popup-status-dot"></div>
+      <div class="status-info">
+        <div class="status-label">Connection</div>
+        <div class="status-value" id="popup-status-text">Disconnected</div>
+      </div>
+    </div>
+
+    <div class="info-section">
+      <div class="info-label">Student Name</div>
+      <div class="info-value" id="popup-student-name">Not set</div>
+
+      <div style="margin-top: 8px;">
+        <div class="info-label">Current Score</div>
+        <div class="score-display">
+          <span class="score-emoji" id="popup-score-emoji">😊</span>
+          <div class="score-text">
+            <div class="score-name" id="popup-score-label">Not monitoring</div>
+            <div class="score-number" id="popup-score-value">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="button-group">
+      <button class="btn btn-dashboard" id="popup-dashboard-btn">Dashboard</button>
+      <button class="btn btn-reset" id="popup-reset-btn">Reset</button>
+    </div>
+
+    <div class="message" id="popup-message"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
