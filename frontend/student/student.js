@@ -103,7 +103,7 @@ function startWebcam() {
 }
 
 function connectWebSocket(name) {
-    websocket = new WebSocket(`ws://127.0.0.1:8000/ws/student/${encodeURIComponent(name)}`);
+    websocket = new WebSocket(`wss://cognitive-load-monitor-k490.onrender.com/ws/student/${encodeURIComponent(name)}`);
     websocket.onopen = () => updateInfo('Connected to backend and sending live signals.');
     websocket.onmessage = event => {
         const payload = JSON.parse(event.data);

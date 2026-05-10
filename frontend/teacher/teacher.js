@@ -65,7 +65,7 @@ function refreshDashboard(scores) {
 }
 
 function connectTeacherSocket() {
-    const ws = new WebSocket('ws://127.0.0.1:8000/ws/teacher');
+    const ws = new WebSocket('wss://cognitive-load-monitor-k490.onrender.com/ws/teacher');
     ws.onopen = () => console.log('Teacher socket connected');
     ws.onmessage = event => {
         const message = JSON.parse(event.data);

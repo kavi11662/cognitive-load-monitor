@@ -1,7 +1,7 @@
 // Cognitive Load Monitor - Content Script
 // This script runs on Google Meet pages and monitors student/teacher cognitive load
 
-const BACKEND_WSS = "wss://cognitive-load-monitor-production.up.railway.app";
+const BACKEND_WSS = "wss://cognitive-load-monitor-k490.onrender.com";
 
 class CognitiveLoadMonitor {
   constructor() {
@@ -277,7 +277,7 @@ class CognitiveLoadMonitor {
 
   openFullDashboard() {
     chrome.tabs.create({ 
-      url: 'https://cognitive-load-monitor-production.up.railway.app/docs' 
+      url: 'https://cognitive-load-monitor-k490.onrender.com/docs' 
     });
   }
 

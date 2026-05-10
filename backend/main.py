@@ -75,25 +75,28 @@ async def teacher_socket(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            latest_scores = get_all_latest_scores()
-            # Send as array of student data
-            student_data = []
-            for student_name, score_info in latest_scores.items():
-                student_data.append({
-                    "student_name": student_name,
-                    "cognitive_load_score": score_info.get("score", 0),
-                    "label": score_info.get("label", "Unknown"),
-                    "color": score_info.get("color", "#888"),
-                    "timestamp": score_info.get("timestamp"),
-                })
-            await websocket.send_text(json.dumps(student_data))
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(), 
+                    timeout=0.01
+                )
+                if json.loads(data).get("type") == "ping":
+                    pass  # ignore ping
+            except asyncio.TimeoutError:
+                pass  # no message, continue
+            except:
+                pass
+            try:
+                scores = get_all_latest_scores()
+                await websocket.send_text(json.dumps(scores))
+            except Exception as e:
+                print(f"Error sending to teacher: {e}")
+                break
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         print("Teacher disconnected")
-        return
     except Exception as e:
-        print(f"Teacher socket error: {e}")
-        await websocket.close()
+        print(f"Teacher websocket error: {e}")
 
 
 @app.get("/history/{student_name}")
