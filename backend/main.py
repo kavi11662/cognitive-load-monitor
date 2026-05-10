@@ -3,10 +3,13 @@ import json
 import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from database import save_score, get_all_latest_scores, get_history
+from database import save_score, get_all_latest_scores, get_history, init_db
 from cognitive_engine import calculate_cognitive_score, label_color
 
 app = FastAPI()
+
+# Initialize database
+init_db()
 
 # Add CORS middleware to accept connections from Chrome extensions and Meet
 app.add_middleware(
@@ -73,30 +76,22 @@ async def student_socket(websocket: WebSocket, student_name: str):
 @app.websocket("/ws/teacher")
 async def teacher_socket(websocket: WebSocket):
     await websocket.accept()
+    print("Teacher WebSocket connected")
     try:
         while True:
             try:
-                data = await asyncio.wait_for(
-                    websocket.receive_text(), 
-                    timeout=0.01
-                )
-                if json.loads(data).get("type") == "ping":
-                    pass  # ignore ping
-            except asyncio.TimeoutError:
-                pass  # no message, continue
-            except:
-                pass
-            try:
                 scores = get_all_latest_scores()
                 await websocket.send_text(json.dumps(scores))
-            except Exception as e:
-                print(f"Error sending to teacher: {e}")
+            except Exception as send_error:
+                print(f"Send error: {send_error}")
                 break
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         print("Teacher disconnected")
     except Exception as e:
-        print(f"Teacher websocket error: {e}")
+        print(f"Teacher WebSocket error: {e}")
+    finally:
+        print("Teacher WebSocket closed")
 
 
 @app.get("/history/{student_name}")
