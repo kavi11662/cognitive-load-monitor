@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from database import save_score, get_all_latest_scores, get_history, init_db
@@ -10,6 +11,9 @@ app = FastAPI()
 
 # Initialize database
 init_db()
+
+# Global active students tracker
+active_students = {}
 
 # Add CORS middleware to accept connections from Chrome extensions and Meet
 app.add_middleware(
@@ -30,6 +34,12 @@ async def root():
 @app.websocket("/ws/student/{student_name}")
 async def student_socket(websocket: WebSocket, student_name: str):
     await websocket.accept()
+    active_students[student_name] = {
+        "student_name": student_name,
+        "cognitive_load_score": 0,
+        "label": "Connecting",
+        "timestamp": datetime.now().isoformat()
+    }
     try:
         while True:
             data = await websocket.receive_text()
@@ -57,8 +67,18 @@ async def student_socket(websocket: WebSocket, student_name: str):
                 face_present=face_present,
             )
 
+            # Update active students
+            active_students[student_name] = {
+                "student_name": student_name,
+                "cognitive_load_score": score_value,
+                "label": label,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Save to DB
             save_score(student_name, student_name, score_value, label, timestamp)
 
+            # Send score back to student
             await websocket.send_text(json.dumps({
                 "cognitive_load_score": score_value,
                 "label": label,
@@ -66,9 +86,12 @@ async def student_socket(websocket: WebSocket, student_name: str):
                 "timestamp": timestamp,
             }))
     except WebSocketDisconnect:
+        # Remove from active students when disconnected
+        active_students.pop(student_name, None)
         print(f"Student {student_name} disconnected")
         return
     except Exception as e:
+        active_students.pop(student_name, None)
         print(f"Student socket error: {e}")
         await websocket.close()
 
@@ -79,12 +102,9 @@ async def teacher_socket(websocket: WebSocket):
     print("Teacher WebSocket connected")
     try:
         while True:
-            try:
-                scores = get_all_latest_scores()
-                await websocket.send_text(json.dumps(scores))
-            except Exception as send_error:
-                print(f"Send error: {send_error}")
-                break
+            # Send only ACTIVE students
+            scores = list(active_students.values())
+            await websocket.send_text(json.dumps(scores))
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         print("Teacher disconnected")
