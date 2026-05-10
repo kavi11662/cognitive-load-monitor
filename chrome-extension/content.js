@@ -1,7 +1,17 @@
 // Cognitive Load Monitor - Content Script
 // This script runs on Google Meet pages and monitors student/teacher cognitive load
 
-const BACKEND_WSS = "wss://cognitive-load-monitor-k490.onrender.com";
+// Backend WebSocket URL
+const BACKEND_WSS = 'wss://cognitive-load-monitor-k490.onrender.com';
+
+// Load MediaPipe Face Mesh
+const script1 = document.createElement('script');
+script1.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+document.head.appendChild(script1);
+
+const script2 = document.createElement('script');
+script2.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
+document.head.appendChild(script2);
 
 class CognitiveLoadMonitor {
   constructor() {
@@ -13,11 +23,18 @@ class CognitiveLoadMonitor {
     this.videoStream = null;
     this.canvas = null;
     this.canvasContext = null;
+    this.faceMesh = null;
+    this.camera = null;
     this.lastFrameData = null;
     this.lastBlinkTime = 0;
     this.blinkCount = 0;
     this.blink_rate = 0;
+    this.ear = 0.3;
     this.face_present = false;
+    this.head_pose_offset = 0.0;
+    this.mouth_open = false;
+    this.is_drowsy = false;
+    this.looking_away = false;
     this.hesitationStartTime = null;
     this.lastKeydownTime = 0;
     this.hesitation_ms = 0;
@@ -37,6 +54,84 @@ class CognitiveLoadMonitor {
     this.reconnectTimer = null;
     this.students = {};
     this.panelWidth = 220;
+  }
+
+  // MediaPipe utility functions
+  getEAR(landmarks, eyeIndices) {
+    const [p1, p2, p3, p4, p5, p6] = eyeIndices.map(i => landmarks[i]);
+    const vertical1 = this.distance(p2, p6);
+    const vertical2 = this.distance(p3, p5);
+    const horizontal = this.distance(p1, p4);
+    return (vertical1 + vertical2) / (2.0 * horizontal);
+  }
+
+  distance(a, b) {
+    return Math.sqrt(
+      Math.pow(a.x - b.x, 2) + 
+      Math.pow(a.y - b.y, 2)
+    );
+  }
+
+  getHeadPose(landmarks) {
+    const nose = landmarks[1];
+    const chin = landmarks[152];
+    const leftEye = landmarks[33];
+    const rightEye = landmarks[263];
+    
+    const eyeMidX = (leftEye.x + rightEye.x) / 2;
+    const noseOffset = Math.abs(nose.x - eyeMidX);
+    
+    return noseOffset;
+  }
+
+  getMouthOpenness(landmarks) {
+    const upperLip = landmarks[13];
+    const lowerLip = landmarks[14];
+    return this.distance(upperLip, lowerLip);
+  }
+
+  calculateScore(metrics) {
+    const {
+      faceDetected,
+      ear,
+      blinkRate,
+      headPoseOffset,
+      mouthOpen,
+      hesitationMs,
+      mouseErratic
+    } = metrics;
+    
+    if (!faceDetected) return { score: 10, label: 'Disengaged' };
+    
+    let score = 50;
+    
+    if (headPoseOffset < 0.05) score += 20;
+    else if (headPoseOffset < 0.1) score += 5;
+    else score -= 25;
+    
+    if (blinkRate >= 10 && blinkRate <= 20) score += 15;
+    else if (blinkRate < 5) score -= 10;
+    else if (blinkRate > 30) score -= 15;
+    
+    if (ear > 0.25) score += 10;
+    else if (ear < 0.15) score -= 20;
+    
+    if (mouthOpen > 0.06) score -= 10;
+    
+    if (hesitationMs > 0 && hesitationMs < 500) score += 10;
+    else if (hesitationMs > 3000) score -= 10;
+    
+    if (mouseErratic > 0 && mouseErratic < 5) score += 5;
+    
+    score = Math.max(0, Math.min(100, score));
+    
+    let label;
+    if (score < 25) label = 'Disengaged';
+    else if (score < 45) label = 'Relaxed';
+    else if (score < 70) label = 'Focused';
+    else label = 'Overloaded';
+    
+    return { score, label };
   }
 
   async init() {
@@ -199,7 +294,23 @@ class CognitiveLoadMonitor {
             </div>
             <div id="clm-metrics">
               <div class="metric">
-                <span class="metric-label">Blinks:</span>
+                <span class="metric-label">👁️ EAR:</span>
+                <span id="clm-ear" class="metric-value">0.30</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">👀 Gaze:</span>
+                <span id="clm-gaze" class="metric-value">Forward</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">😴 Alert:</span>
+                <span id="clm-drowsy" class="metric-value">Alert</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">👄 Yawning:</span>
+                <span id="clm-yawning" class="metric-value">No</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">🔢 Blinks/min:</span>
                 <span id="clm-blink-rate" class="metric-value">0</span>
               </div>
               <div class="metric">
@@ -345,11 +456,10 @@ class CognitiveLoadMonitor {
         audio: false
       });
       this.videoStream = stream;
-      this.setupCanvas();
       this.isMonitoring = true;
       this.reconnectAttempts = 0;
       this.connectStudentWS();
-      this.startCaptureLoop();
+      await this.initFaceMesh();
 
       document.getElementById('clm-start-btn').classList.add('hidden');
       document.getElementById('clm-stop-btn').classList.remove('hidden');
@@ -606,6 +716,81 @@ class CognitiveLoadMonitor {
     }
   }
 
+  async initFaceMesh() {
+    this.faceMesh = new FaceMesh({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+      }
+    });
+
+    this.faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    this.faceMesh.onResults((results) => this.onFaceResults(results));
+
+    this.camera = new Camera(this.videoStream, {
+      onFrame: async () => {
+        await this.faceMesh.send({image: this.videoStream});
+      },
+      width: 640,
+      height: 480
+    });
+
+    this.camera.start();
+  }
+
+  onFaceResults(results) {
+    if (!this.isMonitoring) return;
+
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+      const landmarks = results.multiFaceLandmarks[0];
+      this.face_present = true;
+
+      // Calculate EAR for both eyes
+      const leftEyeIndices = [33, 160, 158, 133, 153, 144];
+      const rightEyeIndices = [362, 385, 387, 263, 373, 380];
+      const leftEAR = this.getEAR(landmarks, leftEyeIndices);
+      const rightEAR = this.getEAR(landmarks, rightEyeIndices);
+      this.ear = (leftEAR + rightEAR) / 2.0;
+
+      // Detect blinks
+      if (this.ear < 0.2 && Date.now() - this.lastBlinkTime > 250) {
+        this.blinkCount++;
+        this.lastBlinkTime = Date.now();
+      }
+
+      // Head pose
+      this.head_pose_offset = this.getHeadPose(landmarks);
+      this.looking_away = this.head_pose_offset > 0.1;
+
+      // Mouth openness
+      const mouthDist = this.getMouthOpenness(landmarks);
+      this.mouth_open = mouthDist > 0.05;
+
+      // Drowsiness detection
+      this.is_drowsy = this.ear < 0.15;
+
+      // Update blink rate (per minute)
+      const now = Date.now();
+      if (now - this.lastBlinkTime > 60000) {
+        this.blink_rate = Math.max(0, this.blinkCount);
+        this.blinkCount = 0;
+        this.lastBlinkTime = now;
+      }
+
+      this.sendMetrics();
+      this.updateScoreDisplay();
+    } else {
+      this.face_present = false;
+      this.sendMetrics();
+      this.updateScoreDisplay();
+    }
+  }
+
   sendMetrics() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return;
@@ -613,10 +798,15 @@ class CognitiveLoadMonitor {
 
     const metrics = {
       student_name: this.studentName,
+      face_detected: this.face_present,
+      ear: this.ear,
       blink_rate: this.blink_rate,
-      face_present: this.face_present,
+      head_pose_offset: this.head_pose_offset,
+      mouth_open: this.mouth_open,
       hesitation_ms: this.hesitation_ms,
-      mouse_erratic: Math.round(this.mouse_erratic),
+      mouse_erratic: this.mouse_erratic,
+      is_drowsy: this.is_drowsy,
+      looking_away: this.looking_away,
       timestamp: new Date().toISOString()
     };
 
@@ -630,11 +820,22 @@ class CognitiveLoadMonitor {
     }
   }
 
-  updateScoreDisplay(score) {
-    const label = this.getScoreLabel(score);
+  updateScoreDisplay() {
+    const metrics = {
+      faceDetected: this.face_present,
+      ear: this.ear,
+      blinkRate: this.blink_rate,
+      headPoseOffset: this.head_pose_offset,
+      mouthOpen: this.mouth_open ? 0.07 : 0.03,
+      hesitationMs: this.hesitation_ms,
+      mouseErratic: this.mouse_erratic
+    };
+
+    const { score, label } = this.calculateScore(metrics);
     const emoji = this.getScoreEmoji(score);
     const color = this.getScoreColor(score);
 
+    this.currentScore = score;
     this.currentLabel = label;
     
     const scoreEmoji = document.getElementById('clm-score-emoji');
@@ -649,11 +850,25 @@ class CognitiveLoadMonitor {
     const scoreDisplay = document.getElementById('clm-score-display');
     if (scoreDisplay) scoreDisplay.style.borderLeftColor = color;
     
+    // Update extra metrics
     const blinkRate = document.getElementById('clm-blink-rate');
     if (blinkRate) blinkRate.textContent = this.blink_rate;
     
     const facePresent = document.getElementById('clm-face-present');
     if (facePresent) facePresent.textContent = this.face_present ? 'Yes' : 'No';
+
+    // Add new metrics display
+    const earDisplay = document.getElementById('clm-ear');
+    if (earDisplay) earDisplay.textContent = this.ear.toFixed(2);
+
+    const gazeDisplay = document.getElementById('clm-gaze');
+    if (gazeDisplay) gazeDisplay.textContent = this.looking_away ? 'Away' : 'Forward';
+
+    const drowsyDisplay = document.getElementById('clm-drowsy');
+    if (drowsyDisplay) drowsyDisplay.textContent = this.is_drowsy ? 'Drowsy' : 'Alert';
+
+    const yawningDisplay = document.getElementById('clm-yawning');
+    if (yawningDisplay) yawningDisplay.textContent = this.mouth_open ? 'Yes' : 'No';
 
     localStorage.setItem('cognitiveScore', score);
   }

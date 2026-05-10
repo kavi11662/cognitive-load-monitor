@@ -67,40 +67,71 @@ def load_model():
 MODEL = load_model()
 
 
-def calculate_cognitive_score(blink_rate, expression_score, hesitation_ms, mouse_erratic, response_delay, face_present=True):
-    if not face_present:
-        return 18, "Disengaged", LABEL_COLORS["Disengaged"]
-
-    feature_vector = [
-        float(blink_rate),
-        float(expression_score),
-        float(hesitation_ms),
-        float(mouse_erratic),
-        float(response_delay),
-    ]
-
-    prediction = MODEL.predict([feature_vector])[0]
-    base = LABEL_SCORES.get(prediction, 50)
-
-    adjustment = 0
-    adjustment -= max(0, (hesitation_ms - 500) * 0.012)
-    adjustment -= max(0, (response_delay - 500) * 0.008)
-    adjustment -= mouse_erratic * 12
-    adjustment += (expression_score - 60) * 0.18
-    adjustment += max(0, 20 - abs(blink_rate - 18)) * 0.8
-
-    score_value = int(max(0, min(100, base + adjustment)))
-
-    if score_value >= 75:
-        label = "Focused"
-    elif score_value >= 55:
-        label = "Relaxed"
-    elif score_value >= 35:
-        label = "Overloaded"
+def calculate_cognitive_score(
+    blink_rate=0, 
+    face_present=False,
+    hesitation_ms=0, 
+    mouse_erratic=0,
+    ear=0.3,
+    head_pose_offset=0.0,
+    mouth_open=False,
+    is_drowsy=False,
+    looking_away=False
+):
+    if not face_present or looking_away:
+        return 10, "Disengaged"
+    
+    if is_drowsy:
+        return 20, "Disengaged"
+        
+    score = 50
+    
+    # Head pose - most important signal
+    if head_pose_offset < 0.05:
+        score += 20
+    elif head_pose_offset < 0.1:
+        score += 5
     else:
-        label = "Disengaged"
-
-    return score_value, label, LABEL_COLORS[label]
+        score -= 25
+    
+    # Eye openness
+    if ear > 0.25:
+        score += 10
+    elif ear < 0.15:
+        score -= 20
+    
+    # Blink rate
+    if 10 <= blink_rate <= 20:
+        score += 15
+    elif blink_rate < 5:
+        score -= 10
+    elif blink_rate > 30:
+        score -= 15
+    
+    # Yawning
+    if mouth_open:
+        score -= 10
+    
+    # Typing
+    if 0 < hesitation_ms < 500:
+        score += 10
+    elif hesitation_ms > 3000:
+        score -= 10
+    
+    # Mouse
+    if 0 < mouse_erratic < 5:
+        score += 5
+    
+    score = max(0, min(100, score))
+    
+    if score < 25:
+        return score, "Disengaged"
+    elif score < 45:
+        return score, "Relaxed"
+    elif score < 70:
+        return score, "Focused"
+    else:
+        return score, "Overloaded"
 
 
 def label_color(label):

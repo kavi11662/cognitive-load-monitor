@@ -51,21 +51,29 @@ async def student_socket(websocket: WebSocket, student_name: str):
                 continue
 
             blink_rate = float(payload.get("blink_rate", 15))
-            face_present = bool(payload.get("face_present", True))
-            expression_score = float(payload.get("expression_score", 60))
+            face_present = bool(payload.get("face_detected", True))
             hesitation_ms = float(payload.get("hesitation_ms", 500))
             mouse_erratic = float(payload.get("mouse_erratic", 0.2))
-            response_delay = float(payload.get("response_delay", 600))
+            ear = float(payload.get("ear", 0.3))
+            head_pose_offset = float(payload.get("head_pose_offset", 0.0))
+            mouth_open = bool(payload.get("mouth_open", False))
+            is_drowsy = bool(payload.get("is_drowsy", False))
+            looking_away = bool(payload.get("looking_away", False))
             timestamp = payload.get("timestamp")
 
-            score_value, label, color = calculate_cognitive_score(
-                blink_rate,
-                expression_score,
-                hesitation_ms,
-                mouse_erratic,
-                response_delay,
+            score_value, label = calculate_cognitive_score(
+                blink_rate=blink_rate,
                 face_present=face_present,
+                hesitation_ms=hesitation_ms,
+                mouse_erratic=mouse_erratic,
+                ear=ear,
+                head_pose_offset=head_pose_offset,
+                mouth_open=mouth_open,
+                is_drowsy=is_drowsy,
+                looking_away=looking_away
             )
+
+            color = label_color(label)
 
             # Update active students
             active_students[student_name] = {
