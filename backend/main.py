@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from database import save_score, get_all_latest_scores, get_history, init_db
+from database import save_score, get_all_latest_scores, get_history, init_db, get_connection
 from cognitive_engine import calculate_cognitive_score, label_color
 
 app = FastAPI()
@@ -117,6 +117,16 @@ async def teacher_socket(websocket: WebSocket):
 @app.get("/history/{student_name}")
 async def student_history(student_name: str):
     return get_history(student_name)
+
+
+@app.delete("/clear-scores")
+async def clear_scores():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM cognitive_scores")
+    conn.commit()
+    conn.close()
+    return {"status": "cleared"}
 
 
 if __name__ == "__main__":

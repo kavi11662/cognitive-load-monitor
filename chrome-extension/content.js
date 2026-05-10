@@ -250,7 +250,13 @@ class CognitiveLoadMonitor {
       document.addEventListener('mousemove', (e) => this.trackMouseMove(e));
     } else {
       const dashboardBtn = document.getElementById('open-dashboard-btn');
-      dashboardBtn.addEventListener('click', () => this.openFullDashboard());
+      dashboardBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        chrome.tabs.create({ 
+          url: 'https://cognitive-load-monitor-k490.onrender.com/docs' 
+        });
+      });
       
       this.startTeacherMonitoring();
     }
@@ -273,12 +279,6 @@ class CognitiveLoadMonitor {
       const monitor = new CognitiveLoadMonitor();
       monitor.init();
     }
-  }
-
-  openFullDashboard() {
-    chrome.tabs.create({ 
-      url: 'https://cognitive-load-monitor-k490.onrender.com/docs' 
-    });
   }
 
   loadSavedName() {

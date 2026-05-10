@@ -6,12 +6,13 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "https://meet.google.com/*",
-    "wss://cognitive-load-monitor-production.up.railway.app/*",
-    "https://cognitive-load-monitor-production.up.railway.app/*"
+    "wss://cognitive-load-monitor-k490.onrender.com/*",
+    "https://cognitive-load-monitor-k490.onrender.com/*"
   ],
   "content_scripts": [
     {
